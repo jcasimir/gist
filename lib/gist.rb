@@ -12,8 +12,8 @@ require 'gist/version' unless defined?(Gist::Version)
 #   Returns the body of gist_id as a string.
 #
 #   >> Gist.write(content)
-#   Creates a gist from the string `content`. Returns the URL of the
-#   new gist.
+#   Creates a gist from `content`, containing a string or a
+#   collection of files. Returns the URL of the new gist.
 #
 #   >> Gist.copy(string)
 #   Copies string to the clipboard.
@@ -120,7 +120,7 @@ module Gist
   end
 
   # Create a gist on gist.github.com
-  def write(files, private_gist = false, description = nil)
+  def write(content, private_gist = false, description = nil)
     url = URI.parse(CREATE_URL)
 
     if PROXY_HOST
@@ -135,7 +135,7 @@ module Gist
     http.ca_file = ca_cert
 
     req = Net::HTTP::Post.new(url.path)
-    req.form_data = data(files, private_gist, description)
+    req.form_data = data(content, private_gist, description)
 
     response = http.start{|h| h.request(req) }
     case response
@@ -184,15 +184,22 @@ module Gist
   end
 
 private
-  # Give an array of file information and private boolean, returns
+  # Give an array of file information or a raw string,
+  # privacy boolean, and a description. Returns
   # an appropriate payload for POSTing to gist.github.com
-  def data(files, private_gist, description)
+  def data(content, private_gist, description)
     data = {}
-    files.each do |file|
-      i = data.size + 1
-      data["file_ext[gistfile#{i}]"]      = file[:extension] ? file[:extension] : '.txt'
-      data["file_name[gistfile#{i}]"]     = file[:filename]
-      data["file_contents[gistfile#{i}]"] = file[:input]
+    if content.respond_to?(:each)
+      content.each do |file|
+        i = data.size + 1
+        data["file_ext[gistfile#{i}]"]      = file[:extension] ? file[:extension] : '.txt'
+        data["file_name[gistfile#{i}]"]     = file[:filename]
+        data["file_contents[gistfile#{i}]"] = file[:input]
+      end
+    else
+      data["file_ext[gistfile0]"] = '.txt'
+      data["file_name[gistfile0]"] = ""
+      data["file_contents[gistfile0]"] = content
     end
     data.merge!({ 'description' => description }) unless description.nil?
     data.merge(private_gist ? { 'action_button' => 'private' } : {}).merge(auth)
